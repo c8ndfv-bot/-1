@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build iOS App for Production
+    name: Build iOS App (.ipa) for Sideloadly
     runs-on: macos-latest
 
     steps:
@@ -20,20 +20,53 @@ jobs:
       with:
         xcode-version: 'latest'
 
-    - name: Verify Swift Files and Compile Check
+    - name: Compile and Package into .ipa
       run: |
-        echo "Checking Swift files..."
-        swiftc -parse TikTokIOSApp.swift Views/*.swift || true
-        echo "Swift syntax check completed!"
-
-    - name: Package iOS Source Code
-      run: |
+        echo "Compiling Swift files for iOS..."
+        mkdir -p Payload/TikTokIOSApp.app
+        
+        xcrun swiftc -target arm64-apple-ios15.0 \
+          -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
+          -framework SwiftUI \
+          -framework UIKit \
+          -framework AVFoundation \
+          -framework Photos \
+          TikTokIOSApp.swift Views/*.swift \
+          -o Payload/TikTokIOSApp.app/TikTokIOSApp
+          
+        python3 -c "
+        plist = '''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+        <plist version=\"1.0\">
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>com.tiktok.ios.you</string>
+            <key>CFBundleName</key>
+            <string>TikTok You</string>
+            <key>CFBundleExecutable</key>
+            <string>TikTokIOSApp</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>4.4</string>
+            <key>UIDeviceFamily</key>
+            <array><integer>1</integer></array>
+            <key>UILaunchScreen</key>
+            <dict/>
+            <key>UISupportedInterfaceOrientations</key>
+            <array><string>UIInterfaceOrientationPortrait</string></array>
+        </dict>
+        </plist>'''
+        with open('Payload/TikTokIOSApp.app/Info.plist', 'w') as f:
+            f.write(plist)
+        "
+        
+        zip -r TikTokIOSApp.ipa Payload
         mkdir -p build_output
-        zip -r build_output/TikTok_iOS_Source.zip .
-      shell: bash
+        mv TikTokIOSApp.ipa build_output/
 
-    - name: Upload Source and Build Artifact
+    - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ios-source-and-build
-        path: build_output/*.zip
+        name: TikTokIOSApp-ipa
+        path: build_output/*.ipa
